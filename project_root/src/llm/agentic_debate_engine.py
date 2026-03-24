@@ -2,21 +2,15 @@ import os
 import json
 import time
 import re
-import dotenv
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+import requests
 
-load_dotenv()
 
-GEMKEY = os.getenv("GEMKEY")
 class AgenticDebateEngine:
 
-    def __init__(self, api_key: str):
+    def __init__(self):
 
-        self.client = genai.Client(api_key=api_key)
-
-        self.model_name = "gemini-2.0-flash"
+        self.model_name = "gemma3:4b"
+        self.ollama_url = "http://localhost:11434/api/generate"
 
         self.max_retries = 2
 
@@ -29,15 +23,18 @@ class AgenticDebateEngine:
 You are a financial risk detection system.
 
 TASK:
-Identify financial risks from the provided text.
+Identify financial risks explicitly mentioned in the text.
 
-STRICT RULES:
-- ONLY extract risks explicitly mentioned
+RULES:
 - DO NOT infer or hallucinate
-- Classify into:
+- ONLY use evidence from text
+- Classify risks into:
   Liquidity, Credit, Operational, Supply Chain, Regulatory, Market, Legal
 
-OUTPUT FORMAT (STRICT JSON ONLY):
+OUTPUT FORMAT:
+Return ONLY valid JSON.
+No explanations. No markdown.
+
 {{
   "risks": [
     {{
@@ -58,16 +55,21 @@ TEXT:
 You are a financial risk auditor.
 
 TASK:
-Verify if each extracted risk is supported by the text.
+Validate the extracted risks.
 
 RULES:
-- Remove hallucinated risks
-- Keep only evidence-backed claims
-- Do not modify wording unnecessarily
+- Remove unsupported risks
+- Keep only evidence-backed risks
+- Do not hallucinate
+
 
 OUTPUT FORMAT:
 Return ONLY valid JSON.
-Do NOT include explanations, markdown, or extra text.
+No explanations.
+No markdown.
+No extra text.
+
+
 {detected_output}
 
 TEXT:
@@ -79,33 +81,40 @@ TEXT:
 You are a financial summarization system.
 
 TASK:
-Produce the final validated risk list.
+Produce final clean risk output.
 
 RULES:
-- Clean formatting
-- Ensure valid JSON
 - Keep only high-confidence risks
+- Ensure valid JSON
 
-OUTPUT FORMAT (STRICT JSON ONLY):
+OUTPUT FORMAT:
+Return ONLY valid JSON.
+No explanations.
+No markdown.
+No extra text.
+
 {validated_output}
 """
 
     # -----------------------------
-    # GEMINI CALL
+    # OLLAMA CALL
     # -----------------------------
 
-    def call_gemini(self, prompt: str) -> str:
+    def call_llm_local(self, prompt: str) -> str:
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                response_mime_type="application/json"
-            )
+        response = requests.post(
+            self.ollama_url,
+            json={
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False
+            }
         )
 
-        return response.text
+        print("\n--- FULL RESPONSE JSON ---\n")
+        print(response.json())
+
+        return response.json().get("response", "")
 
     # -----------------------------
     # JSON EXTRACTION
@@ -116,18 +125,19 @@ OUTPUT FORMAT (STRICT JSON ONLY):
         if not text:
             return None
 
-        # Remove markdown wrappers if present
         text = text.strip()
+
+        # Remove markdown wrappers
         text = re.sub(r"```json", "", text)
         text = re.sub(r"```", "", text)
 
-        # Try direct parse first
+        # Direct parse
         try:
             return json.loads(text)
         except:
             pass
 
-        # Fallback: extract first valid JSON block
+        # Fallback extraction
         json_candidates = re.findall(r"\{[\s\S]*?\}", text)
 
         for candidate in json_candidates:
@@ -139,17 +149,18 @@ OUTPUT FORMAT (STRICT JSON ONLY):
         return None
 
     # -----------------------------
-    # SAFE CALL WITH RETRY
+    # SAFE CALL
     # -----------------------------
 
     def safe_llm_call(self, prompt: str):
 
         for attempt in range(self.max_retries):
+
             try:
-                raw_output = self.call_gemini(prompt)
+                raw_output = self.call_llm_local(prompt)
 
                 print("\n--- RAW LLM OUTPUT ---\n")
-                print(raw_output[:500])  # first 500 chars
+                print(raw_output[:500])
 
                 parsed = self.extract_json(raw_output)
 
@@ -175,6 +186,7 @@ OUTPUT FORMAT (STRICT JSON ONLY):
         )
 
         if not detector_output:
+            print("Detector failed")
             return None
 
         # Skeptic
@@ -183,12 +195,17 @@ OUTPUT FORMAT (STRICT JSON ONLY):
         )
 
         if not skeptic_output:
+            print("Skeptic failed")
             return None
 
         # Synthesizer
         final_output = self.safe_llm_call(
             self.synthesizer_prompt(json.dumps(skeptic_output))
         )
+
+        if not final_output:
+            print("Synthesizer failed")
+            return None
 
         return final_output
 
@@ -204,26 +221,29 @@ OUTPUT FORMAT (STRICT JSON ONLY):
             json.dump(output, f, indent=2)
 
 
+# -----------------------------
+# TEST BLOCK
+# -----------------------------
+
 if __name__ == "__main__":
 
     from src.retrieval.hybrid_retriever import HybridRetriever
 
-    API_KEY = f"{GEMKEY}"
-
-    engine = AgenticDebateEngine(api_key=API_KEY)
+    engine = AgenticDebateEngine()
 
     retriever = HybridRetriever()
     retriever.initialize()
 
     query = "Identify financial risks in this filing"
 
-    results = retriever.retrieve(query, final_k=5)
+    results = retriever.retrieve(query, final_k=1)  # reduced for local model
 
     context = "\n\n".join([r["chunk_text"] for r in results])
 
     output = engine.run_debate(context)
 
     if output:
+        print("\n=== FINAL OUTPUT ===\n")
         print(json.dumps(output, indent=2))
     else:
         print("Failed to generate output.")
