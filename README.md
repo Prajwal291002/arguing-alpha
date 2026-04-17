@@ -44,7 +44,7 @@ SEC Filings → Preprocessing → Chunking → Retrieval (BM25 + Dense)
 → Feature Engineering → ML/DL Models → Predictions
 
 ## 📂 Project Structure
-
+```
 project_root/
 │
 ├── data/
@@ -79,7 +79,7 @@ project_root/
 │ └── test_retrieval.py
 │
 └── README.md
-
+```
 
 ## ⚙️ Installation
 
