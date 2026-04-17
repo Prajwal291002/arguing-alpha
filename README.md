@@ -47,38 +47,75 @@ SEC Filings → Preprocessing → Chunking → Retrieval (BM25 + Dense)
 ``` text
 project_root/
 │
-├── data/
-│ ├── raw_filings/ # SEC filings (HTML)
-│ ├── processed_chunks/ # JSON chunk outputs
-│ └── features/ # Final CSV dataset
+├── logs/
+│ ├── logcounter.py
+│ └── preprocessing_log.txt
+│
+├── notebooks/
+│ ├── evaluation_visuals.ipynb
+│ └── exploratory_analysis.ipynb
 │
 ├── src/
+│ ├── data_ingestion/
+│ │ ├── checker.py
+│ │ ├── company_selector.py
+│ │ ├── filter_chunks.py
+│ │ └── sec_api_downloader.py
+│ │
+│ ├── evaluation/
+│ │ └── retrieval_evaluator.py
+│ │
+│ ├── features/
+│ │ ├── feature_engineering.py
+│ │ ├── metadata_extractor.py
+│ │ └── sequence_builder.py
+│ │
+│ ├── generation/
+│ │ ├── batch_llm_pipeline.py
+│ │ ├── detector_agent.py
+│ │ ├── llm_interface.py
+│ │ ├── optimized_agent.py
+│ │ ├── skeptic_agent.py
+│ │ ├── synthesizer_agent.py
+│ │ ├── test_detector.py
+│ │ └── test_skeptic.py
+│ │
+│ ├── llm/
+│ │ └── agentic_debate_engine.py
+│ │
+│ ├── models/
+│ │ ├── baseline_models.py
+│ │ └── lstm_model.py
+│ │
 │ ├── preprocessing/
-│ │ ├── document_parser.py
+│ │ ├── chunking/
+│ │ │ ├── batch_chunk_pipeline.py
+│ │ │ └── chunk_generator.py
+│ │ │
 │ │ └── section_extraction/
+│ │   ├── document_parser.py
+│ │   ├── section_extractor.py
+│ │   └── test_section_extraction.py
 │ │
 │ ├── retrieval/
 │ │ ├── bm25_retriever.py
 │ │ ├── dense_retriever.py
-│ │ └── hybrid_retriever.py
+│ │ ├── embedding_generator.py
+│ │ ├── hybrid_retriever.py
+│ │ ├── retrieval_evaluator.py
+│ │ ├── test.py
+│ │ ├── test_bm25.py
+│ │ ├── test_dense.py
+│ │ └── test_hybrid.py
 │ │
-│ ├── generation/
-│ │ ├── detector.py
-│ │ ├── skeptic.py
-│ │ └── synthesizer.py
-│ │
-│ ├── feature_engineering/
-│ │ └── build_features.py
-│ │
-│ ├── modeling/
-│ │ ├── train_models.py
-│ │ └── lstm_model.py
+│ └── tests/
+│   └── test_full_pipeline.py
 │
-├── tests/
-│ ├── test_full_pipeline.py
-│ └── test_retrieval.py
-│
-└── README.md
+├── main_pipeline.py
+├── .gitignore
+├── Link.txt
+├── README.md
+└── requirements.txt
 ```
 
 ## ⚙️ Installation
