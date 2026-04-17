@@ -56,7 +56,7 @@ if __name__ == "__main__":
     from src.preprocessing.section_extraction.document_parser import SECDocumentParser
     from src.preprocessing.section_extraction.section_extractor import SectionExtractor
 
-    file_path = "data/raw_filings/A/2018/0001090872-18-000004_10-Q.html"
+    file_path = "data/raw_filings/A/2016/0001090872-16-000076_10-Q.html"
 
     company_identifier = "TEST_COMPANY"
     filing_date = "2018"

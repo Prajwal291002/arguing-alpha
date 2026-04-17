@@ -46,6 +46,7 @@ implicit_errors = total_files - classified
 
 # Final error count
 total_errors = error_files + implicit_errors
+average_chunks = total_chunks / total_files
 
 # Output
 print("===== LOG SUMMARY =====")
@@ -56,6 +57,8 @@ print(f"Error files (explicit): {error_files}")
 print(f"Error files (implicit): {implicit_errors}")
 print(f"Total errors          : {total_errors}")
 print(f"Total chunks created  : {total_chunks}")
+print(f"Average chunks created  : {average_chunks}")
+
 
 # Consistency check
 if success_files + skipped_files == total_files:

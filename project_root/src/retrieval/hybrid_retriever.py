@@ -1,77 +1,74 @@
-from collections import defaultdict
-
-from src.retrieval.bm25_retriever import BM25Retriever
-from src.retrieval.dense_retriever import DenseRetriever
+import numpy as np
 
 
 class HybridRetriever:
 
-    def __init__(self, k: int = 60):
-        self.k = k
+    def __init__(self, bm25_retriever, dense_retriever):
+        self.bm25 = bm25_retriever
+        self.dense = dense_retriever
 
-        self.bm25 = BM25Retriever()
-        self.dense = DenseRetriever()
+    def normalize_scores(self, scores):
+        scores = np.array(scores)
 
-    def initialize(self):
+        if np.max(scores) == np.min(scores):
+            return np.zeros_like(scores)
 
-        print("Loading BM25...")
-        self.bm25.load_chunks("data/processed_chunks/")
-        self.bm25.build_index()
+        return (scores - np.min(scores)) / (np.max(scores) - np.min(scores))
 
-        print("Loading Dense Index...")
-        self.dense.load_index(
-            index_path="data/retrieval_index/faiss_index.bin",
-            metadata_path="data/retrieval_index/metadata.pkl"
-        )
+    def search(self, query: str, top_k: int = 10):
 
-    def reciprocal_rank_fusion(self, bm25_results, dense_results):
+        # BM25 results
+        bm25_results = self.bm25.search(query, top_k=top_k * 5)
 
-        scores = defaultdict(float)
-        metadata_map = {}
+        # Dense results
+        dense_results = self.dense.search(query, top_k=top_k * 5)
 
-        # BM25 contribution
-        for rank, result in enumerate(bm25_results):
-            chunk_id = result["metadata"]["chunk_id"]
-            scores[chunk_id] += 1 / (self.k + rank)
-            metadata_map[chunk_id] = result
+        # Build index mapping
+        combined = {}
 
-        # Dense contribution
-        for rank, result in enumerate(dense_results):
-            chunk_id = result["metadata"]["chunk_id"]
-            scores[chunk_id] += 1 / (self.k + rank)
-            metadata_map[chunk_id] = result
+        # BM25 indexing
+        for res in bm25_results:
+            key = res["metadata"]["chunk_id"]
+            combined[key] = {
+                "text": res["text"],
+                "metadata": res["metadata"],
+                "bm25_score": res["score"],
+                "dense_score": 0.0
+            }
 
-        # Sort by combined score
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        # Dense indexing
+        for res in dense_results:
+            key = res["metadata"]["chunk_id"]
 
-        final_results = []
+            if key not in combined:
+                combined[key] = {
+                    "text": res["text"],
+                    "metadata": res["metadata"],
+                    "bm25_score": 0.0,
+                    "dense_score": res["score"]
+                }
+            else:
+                combined[key]["dense_score"] = res["score"]
 
-        for chunk_id, score in ranked:
-            entry = metadata_map[chunk_id]
-            entry["rrf_score"] = score
-            final_results.append(entry)
+        # Normalize scores
+        bm25_scores = [v["bm25_score"] for v in combined.values()]
+        dense_scores = [v["dense_score"] for v in combined.values()]
 
-        return final_results
+        norm_bm25 = self.normalize_scores(bm25_scores)
+        norm_dense = self.normalize_scores(dense_scores)
 
-    def retrieve(self, query: str, final_k: int = 5):
+        # Combine scores
+        results = []
+        for i, (key, value) in enumerate(combined.items()):
+            final_score = 0.5 * norm_bm25[i] + 0.5 * norm_dense[i]
 
-        bm25_results = self.bm25.retrieve(query, top_k=20)
-        dense_results = self.dense.retrieve(query, top_k=20)
+            results.append({
+                "score": float(final_score),
+                "text": value["text"],
+                "metadata": value["metadata"]
+            })
 
-        fused_results = self.reciprocal_rank_fusion(bm25_results, dense_results)
+        # Sort final results
+        results = sorted(results, key=lambda x: x["score"], reverse=True)[:top_k]
 
-        return fused_results[:final_k]
-
-
-if __name__ == "__main__":
-
-    retriever = HybridRetriever()
-    retriever.initialize()
-
-    query = "liquidity risk and cash flow problems"
-
-    results = retriever.retrieve(query, final_k=5)
-
-    for i, res in enumerate(results):
-        print(f"\nResult {i+1} | RRF Score: {res['rrf_score']}")
-        print(res["chunk_text"][:300])
+        return results

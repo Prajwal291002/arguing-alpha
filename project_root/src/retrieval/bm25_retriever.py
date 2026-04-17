@@ -7,45 +7,61 @@ class BM25Retriever:
 
     def __init__(self):
         self.corpus = []
-        self.metadata = []
+        self.chunk_metadata = []
         self.tokenized_corpus = []
         self.bm25 = None
 
     def load_chunks(self, processed_chunks_path: str):
 
+        total_files = 0
+        total_loaded = 0
+        failed_files = 0
+
         for root, _, files in os.walk(processed_chunks_path):
             for file in files:
+
                 if not file.endswith(".json"):
                     continue
 
+                total_files += 1
                 file_path = os.path.join(root, file)
 
-                with open(file_path, "r", encoding="utf-8") as f:
-                    records = json.load(f)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        records = json.load(f)
 
-                for record in records:
-                    text = record["chunk_text"]
+                        for record in records:
+                            text = record.get("chunk_text", "").strip()
 
-                    self.corpus.append(text)
-                    self.metadata.append(record)
+                            if not text:
+                                continue
 
-        print(f"Loaded {len(self.corpus)} chunks.")
+                            self.corpus.append(text)
+                            self.chunk_metadata.append(record)
+                            total_loaded += 1
 
-    def tokenize(self, text: str):
-        return text.lower().split()
+                except Exception as e:
+                    failed_files += 1
+                    print(f"Failed to load: {file_path} | Error: {e}")
+
+        print("\n===== BM25 LOAD SUMMARY =====")
+        print(f"Total JSON files read : {total_files}")
+        print(f"Total chunks loaded   : {total_loaded}")
+        print(f"Failed files          : {failed_files}")
+
+    def tokenize_corpus(self):
+        print("Tokenizing corpus...")
+        self.tokenized_corpus = [doc.lower().split() for doc in self.corpus]
 
     def build_index(self):
-        self.tokenized_corpus = [self.tokenize(doc) for doc in self.corpus]
+        print("Building BM25 index...")
         self.bm25 = BM25Okapi(self.tokenized_corpus)
-        print("BM25 index built.")
 
-    def retrieve(self, query: str, top_k: int = 5):
-
-        tokenized_query = self.tokenize(query)
-
+    def search(self, query: str, top_k: int = 5):
+        tokenized_query = query.lower().split()
         scores = self.bm25.get_scores(tokenized_query)
 
-        ranked_indices = sorted(
+        top_indices = sorted(
             range(len(scores)),
             key=lambda i: scores[i],
             reverse=True
@@ -53,27 +69,11 @@ class BM25Retriever:
 
         results = []
 
-        for idx in ranked_indices:
+        for idx in top_indices:
             results.append({
-                "score": float(scores[idx]),
-                "chunk_text": self.corpus[idx],
-                "metadata": self.metadata[idx]
+                "score": scores[idx],
+                "text": self.corpus[idx],
+                "metadata": self.chunk_metadata[idx]
             })
 
         return results
-
-
-if __name__ == "__main__":
-
-    retriever = BM25Retriever()
-
-    retriever.load_chunks("data/processed_chunks/")
-    retriever.build_index()
-
-    query = "liquidity risk and cash flow problems"
-
-    results = retriever.retrieve(query, top_k=5)
-
-    for i, res in enumerate(results):
-        print(f"\nResult {i+1} | Score: {res['score']}")
-        print(res["chunk_text"][:300])

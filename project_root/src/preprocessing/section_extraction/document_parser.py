@@ -36,7 +36,7 @@ class SECDocumentParser:
         return None
 
 if __name__ == "__main__":
-    sample_file_path = "../../../data/raw_filings/A/2018/0001090872-18-000004_10-Q.html"
+    sample_file_path = "data/raw_filings/A/2016/0001090872-16-000076_10-Q.html"
     
     with open(sample_file_path, "r", encoding="utf-8") as file:
         raw_content = file.read()
