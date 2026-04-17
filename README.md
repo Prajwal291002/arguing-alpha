@@ -44,7 +44,7 @@ SEC Filings → Preprocessing → Chunking → Retrieval (BM25 + Dense)
 → Feature Engineering → ML/DL Models → Predictions
 
 ## 📂 Project Structure
-```
+``` text
 project_root/
 │
 ├── data/
